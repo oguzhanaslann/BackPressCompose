@@ -1,11 +1,14 @@
 package com.example.backpresscompose
 
+import android.os.Build
 import android.os.Bundle
+import java.util.Stack
 import android.util.Log
-import androidx.activity.ComponentActivity
+import android.window.OnBackInvokedCallback
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -15,11 +18,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.backpresscompose.ui.theme.BackPressComposeTheme
@@ -40,13 +43,24 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(
             callbackGenerator("MainActivity")
         )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                1,
+                onBackInvokedCallbackGenerator("MainActivity")
+            )
+        }
     }
 
-    private fun callbackGenerator(title: String) = object : OnBackPressedCallback(true) {
+    private fun callbackGenerator(title: String) = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
             Log.e(TAG, "handleOnBackPressed:  $title")
         }
     }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun onBackInvokedCallbackGenerator(title: String) =
+        (OnBackInvokedCallback { Log.e(TAG, "onBackInvoked: $title") })
 }
 
 @Composable
@@ -61,10 +75,17 @@ fun MainScreen() {
             selectionStack.isNotEmpty().or(selected.value != 0)
         }
 
-        BackHandler(handleBackHandler) {
-            Log.e(TAG, "MainScreen: BackHandler ")
-            selected.value = if (selectionStack.isEmpty()) 0 else selectionStack.pop()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            BackInvokeHandler(handleBackHandler) {
+                selected.value = if (selectionStack.isEmpty()) 0 else selectionStack.pop()
+            }
+        } else {
+            BackHandler(handleBackHandler) {
+                Log.e(TAG, "MainScreen: BackHandler ")
+                selected.value = if (selectionStack.isEmpty()) 0 else selectionStack.pop()
+            }
         }
+
 
         LazyVerticalGrid(
             columns = GridCells.Adaptive(64.dp),
@@ -84,6 +105,34 @@ fun MainScreen() {
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+fun BackInvokeHandler(
+    handleBackHandler: Boolean,
+    priority : Int = 1,
+    callback : () -> Unit = {}
+) {
+    val _callback = remember {
+        OnBackInvokedCallback {
+            Log.e(TAG, "BackInvokeHandler: ")
+            callback()
+        }
+    }
+
+    val activity = LocalContext.current as AppCompatActivity
+    if (handleBackHandler) {
+        activity.onBackInvokedDispatcher.registerOnBackInvokedCallback(priority, _callback)
+    } else {
+        activity.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(_callback)
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner.lifecycle, activity.onBackInvokedDispatcher,handleBackHandler) {
+        onDispose {
+            activity.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(_callback)
         }
     }
 }
