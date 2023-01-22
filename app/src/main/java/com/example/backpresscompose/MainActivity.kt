@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.Fragment
 import com.example.backpresscompose.ui.theme.BackPressComposeTheme
 import java.util.*
 
@@ -43,13 +44,6 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(
             callbackGenerator("MainActivity")
         )
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            onBackInvokedDispatcher.registerOnBackInvokedCallback(
-                1,
-                onBackInvokedCallbackGenerator("MainActivity")
-            )
-        }
     }
 
     private fun callbackGenerator(title: String) = object : OnBackPressedCallback(false) {
@@ -81,7 +75,6 @@ fun MainScreen() {
             }
         } else {
             BackHandler(handleBackHandler) {
-                Log.e(TAG, "MainScreen: BackHandler ")
                 selected.value = if (selectionStack.isEmpty()) 0 else selectionStack.pop()
             }
         }
@@ -102,6 +95,8 @@ fun MainScreen() {
                             selectionStack.push(selected.value)
                         }
                         selected.value = index
+
+                        Log.e(TAG, ": ${selectionStack.isNotEmpty().or(selected.value != 0) }")
                     }
                 )
             }
@@ -116,23 +111,40 @@ fun BackInvokeHandler(
     priority : Int = 1,
     callback : () -> Unit = {}
 ) {
-    val _callback = remember {
+    val backInvokedCallback = remember {
         OnBackInvokedCallback {
-            Log.e(TAG, "BackInvokeHandler: ")
             callback()
         }
     }
 
-    val activity = LocalContext.current as AppCompatActivity
-    if (handleBackHandler) {
-        activity.onBackInvokedDispatcher.registerOnBackInvokedCallback(priority, _callback)
-    } else {
-        activity.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(_callback)
+    val activity = when(LocalLifecycleOwner.current) {
+        is MainActivity -> LocalLifecycleOwner.current as MainActivity
+        is Fragment -> (LocalLifecycleOwner.current as Fragment).requireActivity() as MainActivity
+        else -> {
+            val context = LocalContext.current
+            if (context is MainActivity) {
+                context
+            } else {
+                throw IllegalStateException("LocalLifecycleOwner is not MainActivity or Fragment")
+            }
     }
+
+    }
+    if (handleBackHandler) {
+        activity.onBackInvokedDispatcher.registerOnBackInvokedCallback(priority, backInvokedCallback)
+    }
+
+    LaunchedEffect(handleBackHandler) {
+        if (!handleBackHandler) {
+            activity.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(backInvokedCallback)
+        }
+    }
+
+
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner.lifecycle, activity.onBackInvokedDispatcher,handleBackHandler) {
+    DisposableEffect(lifecycleOwner.lifecycle, activity.onBackInvokedDispatcher) {
         onDispose {
-            activity.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(_callback)
+            activity.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(backInvokedCallback)
         }
     }
 }
