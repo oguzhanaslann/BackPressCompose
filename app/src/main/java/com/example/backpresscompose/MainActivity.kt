@@ -5,6 +5,7 @@ import android.os.Bundle
 import java.util.Stack
 import android.util.Log
 import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -95,8 +96,6 @@ fun MainScreen() {
                             selectionStack.push(selected.value)
                         }
                         selected.value = index
-
-                        Log.e(TAG, ": ${selectionStack.isNotEmpty().or(selected.value != 0) }")
                     }
                 )
             }
@@ -108,7 +107,7 @@ fun MainScreen() {
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 fun BackInvokeHandler(
     handleBackHandler: Boolean,
-    priority : Int = 1,
+    priority : Int = OnBackInvokedDispatcher.PRIORITY_DEFAULT,
     callback : () -> Unit = {}
 ) {
     val backInvokedCallback = remember {
@@ -141,8 +140,7 @@ fun BackInvokeHandler(
     }
 
 
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner.lifecycle, activity.onBackInvokedDispatcher) {
+    DisposableEffect(activity.lifecycle, activity.onBackInvokedDispatcher) {
         onDispose {
             activity.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(backInvokedCallback)
         }
