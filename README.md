@@ -1,8 +1,5 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>BackPressCompose</title>
-</head>
 <body>
   <h1>BackPressCompose</h1>
   <p>A project created to demonstrate the "BackHandler" and provide a similar "OnBackInvokedCallback" composable solution.</p>
